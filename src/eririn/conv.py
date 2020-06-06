@@ -4,14 +4,16 @@
 import os
 
 from openpyxl import Workbook
-from openpyxl.styles import PatternFill
+from openpyxl.styles import PatternFill, Font
+from openpyxl.styles.colors import Color
 from openpyxl.utils.cell import get_column_letter
 from PIL import Image
+from tqdm import tqdm
 
 
-def ctuple2cstr(tup, alpha=255):
+def ctuple2cstr(tup, alpha=0xff):
     r, g, b = tup
-    return "%02x%02x%02x" % (r, g, b)
+    return ("%02x%02x%02x" % (r, g, b)).upper()
 
 
 def main(arguments):
@@ -26,9 +28,13 @@ def main(arguments):
     width_in_charwidth = 1.0
 
     wss = []
-    for f in inputs:
-        ws = wb.create_sheet(os.path.basename(f))
-        wss.append(ws)
+    for fidx, f in enumerate(inputs):
+        if fidx == 0:
+            ws = wb.active
+            ws.title = os.path.basename(f)
+        else:
+            ws = wb.create_sheet(os.path.basename(f))
+
         with Image.open(f) as im:
             print("%s: format=%s, size=%s" % (f, im.format, im.size))
             bands = im.getbands()
@@ -54,15 +60,23 @@ def main(arguments):
             rgb = list(rgb)
 
             width, height = im.size
+            c_width, c_height = int(width * 0.6), int(height * 0.6)
 
-            for y in range(height):
-                ws.row_dimensions[y + 1].height = height_in_points
-                for x in range(width):
-                    c = ws.cell(column=(x + 1), row=(y + 1), value=" ")
+            for x in tqdm(range(c_width)):
+                for y in range(c_height):
+                    _ = ws.cell(column=(x + 1), row=(y + 1), value=" ")
                     color = ctuple2cstr(rgb[y * width + x])
-                    c.fill = PatternFill("solid", fgColor=color)
-                    if y == (height - 1):
-                        ws.column_dimensions[get_column_letter(
-                            x + 1)].width = width_in_charwidth
+                    c = ws[get_column_letter(x + 1) + ("%d" % (y + 1))]
+                    # cl = Color(rgb=color, type="rgb")
+                    # c.font = Font(name='Calibri', size=11, bold=False, italic=False,
+                    #     vertAlign=None, underline='none', strike=False, color=color)
+                    c.fill = PatternFill(fgColor=color, fill_type="solid")
+
+            for y in range(c_height):
+                ws.row_dimensions[y + 1].height = height_in_points
+
+            for x in range(c_width):
+                ws.column_dimensions[get_column_letter(
+                    x + 1)].width = width_in_charwidth
 
     wb.save(output)
