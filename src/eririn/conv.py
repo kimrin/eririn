@@ -11,9 +11,25 @@ from PIL import Image
 from tqdm import tqdm
 
 
+LIMIT_OF_EXCEL = 0x18001
+
+
 def ctuple2cstr(tup, alpha=0xff):
     r, g, b = tup
     return ("%02x%02x%02x" % (r, g, b)).upper()
+
+
+def resize_tuple(width, height):
+    all_pixel = width * height
+    if all_pixel < LIMIT_OF_EXCEL:
+        return (width, height)
+    alpha = (LIMIT_OF_EXCEL / all_pixel) ** 0.5
+    print("alpha = %f" % alpha)
+    r_width, r_height = int(width * alpha), int(height * alpha)
+    actual_pixel = r_width * r_height
+    print("actual pixel to write = %d" % actual_pixel)
+
+    return (r_width, r_height)
 
 
 def main(arguments):
@@ -36,8 +52,14 @@ def main(arguments):
             ws = wb.create_sheet(os.path.basename(f))
 
         with Image.open(f) as im:
+            width, height = im.size
+            resized = resize_tuple(width, height)
+            c_width, c_height = resized
+            im2 = im.resize(resized)
             print("%s: format=%s, size=%s" % (f, im.format, im.size))
-            bands = im.getbands()
+            if c_width != width or c_height != height:
+                print("resized to: size=%s" % str(im2.size))
+            bands = im2.getbands()
             cdict = {}
             for ix, b in enumerate(bands):
                 if b == "R":
@@ -51,25 +73,23 @@ def main(arguments):
                 elif b == "A":
                     cdict["A"] = ix
             try:
-                rgb = zip(list(im.getdata(band=cdict["R"])), list(
-                    im.getdata(band=cdict["G"])), list(im.getdata(band=cdict["B"])))
+                rgb = zip(list(im2.getdata(band=cdict["R"])), list(
+                    im2.getdata(band=cdict["G"])), list(im2.getdata(band=cdict["B"])))
             except:
-                rgb = zip(list(im.getdata(band="L")), list(
-                    im.getdata(band="L")), list(im.getdata(band="L")))
+                rgb = zip(list(im2.getdata(band="L")), list(
+                    im2.getdata(band="L")), list(im2.getdata(band="L")))
 
             rgb = list(rgb)
 
-            width, height = im.size
-            c_width, c_height = int(width * 0.6), int(height * 0.6)
-
+            bytes_written = 0
             for x in tqdm(range(c_width)):
                 for y in range(c_height):
                     _ = ws.cell(column=(x + 1), row=(y + 1), value=" ")
-                    color = ctuple2cstr(rgb[y * width + x])
+                    bytes_written += 1
+                    if bytes_written > LIMIT_OF_EXCEL:
+                        break
+                    color = ctuple2cstr(rgb[y * c_width + x])
                     c = ws[get_column_letter(x + 1) + ("%d" % (y + 1))]
-                    # cl = Color(rgb=color, type="rgb")
-                    # c.font = Font(name='Calibri', size=11, bold=False, italic=False,
-                    #     vertAlign=None, underline='none', strike=False, color=color)
                     c.fill = PatternFill(fgColor=color, fill_type="solid")
 
             for y in range(c_height):
