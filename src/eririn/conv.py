@@ -2,21 +2,26 @@
 # -*- coding: utf-8 -*-
 
 import os
+from operator import itemgetter
 
 from openpyxl import Workbook
-from openpyxl.styles import PatternFill, Font
+from openpyxl.styles import Font, PatternFill
 from openpyxl.styles.colors import Color
 from openpyxl.utils.cell import get_column_letter
 from PIL import Image
 from tqdm import tqdm
 
+# LIMIT_OF_EXCEL = 0x18001
+LIMIT_OF_EXCEL = 0x18001 * 2
 
-LIMIT_OF_EXCEL = 0x18001
 
+def ctuple2cstr(tup, dic=None):
+    if dic is not None:
+        tup = dic[tup]
 
-def ctuple2cstr(tup, alpha=0xff):
     r, g, b = tup
-    return ("%02x%02x%02x" % (r, g, b)).upper()
+
+    return "%02X%02X%02X" % (r, g, b)
 
 
 def resize_tuple(width, height):
@@ -80,6 +85,28 @@ def main(arguments):
                     im2.getdata(band="L")), list(im2.getdata(band="L")))
 
             rgb = list(rgb)
+            rgbmap = {(r, g, b): (r, g, b) for r, g, b in rgb}
+            num_c = len(list(rgbmap.keys()))
+            reduced_ratio = 0.5
+            spl = int((num_c * reduced_ratio) ** 0.3333333333333333)
+            st = 255 / spl
+
+            index_dict = {}
+            for i in range(spl):
+                for j in range(spl):
+                    for k in range(spl):
+                        index_dict[i * spl * spl + j * spl + k] = 0
+
+            new_color_dict = {}
+            con = (0, 0, 0)
+            for idx, s in enumerate(list(rgbmap.keys())):
+                r, g, b = s
+                index = int(r / st) * spl * spl + \
+                    int(g / st) * spl + int(b / st)
+                if index_dict[index] == 0:
+                    index_dict[index] = (
+                        int((r / st + 0.5) * st), int((g / st + 0.5) * st), int((b / st + 0.5) * st))
+                new_color_dict[s] = index_dict[index]
 
             bytes_written = 0
             for x in tqdm(range(c_width)):
@@ -88,7 +115,8 @@ def main(arguments):
                     bytes_written += 1
                     if bytes_written > LIMIT_OF_EXCEL:
                         break
-                    color = ctuple2cstr(rgb[y * c_width + x])
+                    color = ctuple2cstr(
+                        rgb[y * c_width + x], dic=new_color_dict)
                     c = ws[get_column_letter(x + 1) + ("%d" % (y + 1))]
                     c.fill = PatternFill(fgColor=color, fill_type="solid")
 
