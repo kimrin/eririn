@@ -126,24 +126,27 @@ def main(arguments):
         with Image.open(f) as im:
             width, height = im.size
             print("%s: format=%s, size=%s" % (f, im.format, im.size))
-
-            resized = resize_tuple(width, height)
+            resized = im.size
             rgb, rgbmap, num_c = get_image_color_dict(im, resized)
-
-            stepx = int(width / 100.0)
-            stepy = int(height / 100.0)
-
+            
             if num_c > 65535:
-                while num_c > 65535:
-                    resized = (resized[0] - stepx, resized[1] - stepy)
-                    rgb, rgbmap, num_c = get_image_color_dict(im, resized)
-            else:
-                while num_c <= 65535:
-                    oldtup = rgb, rgbmap, num_c, resized
-                    resized = (resized[0] + stepx, resized[1] + stepy)
-                    rgb, rgbmap, num_c = get_image_color_dict(im, resized)
-                
-                rgb, rgbmap, num_c, resized = oldtup
+                resized = resize_tuple(width, height)
+                rgb, rgbmap, num_c = get_image_color_dict(im, resized)
+
+                stepx = int(width / 100.0)
+                stepy = int(height / 100.0)
+
+                if num_c > 65535:
+                    while num_c > 65535:
+                        resized = (resized[0] - stepx, resized[1] - stepy)
+                        rgb, rgbmap, num_c = get_image_color_dict(im, resized)
+                else:
+                    while num_c <= 65535:
+                        oldtup = rgb, rgbmap, num_c, resized
+                        resized = (resized[0] + stepx, resized[1] + stepy)
+                        rgb, rgbmap, num_c = get_image_color_dict(im, resized)
+                    
+                    rgb, rgbmap, num_c, resized = oldtup
 
             c_width, c_height = resized
 
