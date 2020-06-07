@@ -43,14 +43,19 @@ def get_image_color_dict(im, size_im):
     for ix, b in enumerate(bands):
         cdict[b] = ix
 
-    try:
-        rgb = zip(list(im2.getdata(band=cdict["R"])), list(
-            im2.getdata(band=cdict["G"])), list(im2.getdata(band=cdict["B"])))
-    except:
-        rgb = zip(list(im2.getdata(band="L")), list(
-            im2.getdata(band="L")), list(im2.getdata(band="L")))
+    if ("R" in cdict) and ("G" in cdict) and ("B" in cdict):
+        rgb = list(zip(list(im2.getdata(band=cdict["R"])), list(
+            im2.getdata(band=cdict["G"])), list(im2.getdata(band=cdict["B"]))))
+    else:
+        im3 = im2.convert("RGB")
+        bands = im3.getbands()
+        cdict = {}
+        for ix, b in enumerate(bands):
+            cdict[b] = ix
+        rgb = list(zip(list(im3.getdata(band=cdict["R"])), list(
+            im3.getdata(band=cdict["G"])), list(im3.getdata(band=cdict["B"]))))
 
-    rgb = list(rgb)
+
     rgbmap = {(r, g, b): (r, g, b) for r, g, b in rgb}
     num_c = len(list(rgbmap.keys()))
     print("read colors: %d" % num_c)
@@ -130,38 +135,43 @@ def main(arguments):
             rgb, rgbmap, num_c = get_image_color_dict(im, resized)
 
             if num_c > 65535:
-                resized = resize_tuple(width, height)
-                rgb, rgbmap, num_c = get_image_color_dict(im, resized)
-
-                stepx = int(width / 100.0)
-                stepy = int(height / 100.0)
+                # attempt to png8
+                im_tmp = im.quantize(colors=256, method=2)
+                im2 = im_tmp.convert("RGB")
+                rgb, rgbmap, num_c = get_image_color_dict(im2, resized)
 
                 if num_c > 65535:
-                    while num_c > 65535:
-                        resized = (resized[0] - stepx, resized[1] - stepy)
-                        rgb, rgbmap, num_c = get_image_color_dict(im, resized)
-                else:
-                    while num_c <= 65535:
-                        oldtup = rgb, rgbmap, num_c, resized
-                        resized = (resized[0] + stepx, resized[1] + stepy)
-                        rgb, rgbmap, num_c = get_image_color_dict(im, resized)
-                    
-                    rgb, rgbmap, num_c, resized = oldtup
+                    resized = resize_tuple(width, height)
+                    rgb, rgbmap, num_c = get_image_color_dict(im, resized)
+
+                    stepx = int(width / 100.0)
+                    stepy = int(height / 100.0)
+
+                    if num_c > 65535:
+                        while num_c > 65535:
+                            resized = (resized[0] - stepx, resized[1] - stepy)
+                            rgb, rgbmap, num_c = get_image_color_dict(im, resized)
+                    else:
+                        while num_c <= 65535:
+                            oldtup = rgb, rgbmap, num_c, resized
+                            resized = (resized[0] + stepx, resized[1] + stepy)
+                            rgb, rgbmap, num_c = get_image_color_dict(im, resized)
+                        
+                        rgb, rgbmap, num_c, resized = oldtup
 
             c_width, c_height = resized
 
             new_color_dict = get_reduced_color_map(num_c, rgbmap)
-            # fo = Font(name='Calibri', size=11)
+            fo = Font(name='Calibri', size=1, color="FFFFFFFF")
             bytes_written = 0
             for x in tqdm(range(c_width)):
                 for y in range(c_height):
                     color = ctuple2cstr(
                         rgb[y * c_width + x], dic=new_color_dict)
-                    c = ws.cell(column=(x + 1), row=(y + 1), value=" ")
+                    c = ws.cell(column=(x + 1), row=(y + 1), value=("#%s" % color))
                     bytes_written += 1
                     co = Color(color)
-                    # fo.color = co
-                    # c.font = fo
+                    c.font = fo
                     c.fill = PatternFill(fgColor=co, fill_type="solid")
                     
             for y in range(c_height):
