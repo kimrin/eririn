@@ -12,7 +12,9 @@ from PIL import Image
 from tqdm import tqdm
 
 # LIMIT_OF_EXCEL = 0x18001
-LIMIT_OF_EXCEL = 0x18001 * 2
+reduced_ratio = 0.75
+
+LIMIT_OF_EXCEL = int(0x18001 / reduced_ratio)
 
 
 def ctuple2cstr(tup, dic=None):
@@ -20,6 +22,14 @@ def ctuple2cstr(tup, dic=None):
         tup = dic[tup]
 
     r, g, b = tup
+
+    # silly clamp
+    if r > 255:
+        r = 255
+    if g > 255:
+        g = 255
+    if b > 255:
+        b = 255
 
     return "%02X%02X%02X" % (r, g, b)
 
@@ -87,23 +97,28 @@ def main(arguments):
             rgb = list(rgb)
             rgbmap = {(r, g, b): (r, g, b) for r, g, b in rgb}
             num_c = len(list(rgbmap.keys()))
-            reduced_ratio = 0.5
+            print("read colors: %d" % num_c)
+            print("reduced colors: %d" % int(num_c * reduced_ratio))
+            
             spl = int((num_c * reduced_ratio) ** 0.3333333333333333)
+            spl1p = spl + 1
             st = int(256 / spl)
 
             index_dict = {}
-            for i in range(spl):
-                for j in range(spl):
-                    for k in range(spl):
-                        index_dict[i * spl * spl + j * spl + k] = 0
+            for i in range(spl1p):
+                for j in range(spl1p):
+                    for k in range(spl1p):
+                        index_dict[i * spl1p * spl1p + j * spl1p + k] = 0
 
             new_color_dict = {}
-            con = (0, 0, 0)
             for idx, s in enumerate(list(rgbmap.keys())):
                 r, g, b = s
-                index = int(r / st) * spl * spl + \
-                    int(g / st) * spl + int(b / st)
-                if index_dict.get(index, 0) == 0:
+                mr, mg, mb = int(
+                    ((r + 0.5) / 256) * 256), int(((g + 0.5) / 256) * 256), int(((b + 0.5) / 256) * 256)
+                i, j, k = int(r / 256 * st), int(g /
+                                                 256 * st), int(b / 256 * st)
+                index = i * spl1p * spl1p + j * spl1p + k
+                if index_dict[index] == 0:
                     index_dict[index] = (
                         int((r / st + 0.5) * st), int((g / st + 0.5) * st), int((b / st + 0.5) * st))
                 new_color_dict[s] = index_dict[index]
