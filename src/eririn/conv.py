@@ -41,7 +41,7 @@ def main(arguments):
 
     wb = Workbook()
     height_in_points = 10.0
-    width_in_charwidth = 1.0
+    width_in_charwidth = 1.6
 
     wss = []
     for fidx, f in enumerate(inputs):
@@ -55,7 +55,7 @@ def main(arguments):
             width, height = im.size
             resized = resize_tuple(width, height)
             c_width, c_height = resized
-            im2 = im.resize(resized)
+            im2 = im.resize(resized, resample=Image.LANCZOS)
             print("%s: format=%s, size=%s" % (f, im.format, im.size))
             if c_width != width or c_height != height:
                 print("resized to: size=%s" % str(im2.size))
