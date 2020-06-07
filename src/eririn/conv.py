@@ -128,7 +128,7 @@ def main(arguments):
             print("%s: format=%s, size=%s" % (f, im.format, im.size))
             resized = im.size
             rgb, rgbmap, num_c = get_image_color_dict(im, resized)
-            
+
             if num_c > 65535:
                 resized = resize_tuple(width, height)
                 rgb, rgbmap, num_c = get_image_color_dict(im, resized)
@@ -151,19 +151,19 @@ def main(arguments):
             c_width, c_height = resized
 
             new_color_dict = get_reduced_color_map(num_c, rgbmap)
-
+            # fo = Font(name='Calibri', size=11)
             bytes_written = 0
             for x in tqdm(range(c_width)):
                 for y in range(c_height):
-                    _ = ws.cell(column=(x + 1), row=(y + 1), value=" ")
-                    bytes_written += 1
-                    # if bytes_written > LIMIT_OF_EXCEL:
-                    #     break
                     color = ctuple2cstr(
                         rgb[y * c_width + x], dic=new_color_dict)
-                    c = ws[get_column_letter(x + 1) + ("%d" % (y + 1))]
-                    c.fill = PatternFill(fgColor=color, fill_type="solid")
-
+                    c = ws.cell(column=(x + 1), row=(y + 1), value=" ")
+                    bytes_written += 1
+                    co = Color(color)
+                    # fo.color = co
+                    # c.font = fo
+                    c.fill = PatternFill(fgColor=co, fill_type="solid")
+                    
             for y in range(c_height):
                 ws.row_dimensions[y + 1].height = height_in_points
 
