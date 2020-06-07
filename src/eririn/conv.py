@@ -89,7 +89,7 @@ def main(arguments):
             num_c = len(list(rgbmap.keys()))
             reduced_ratio = 0.5
             spl = int((num_c * reduced_ratio) ** 0.3333333333333333)
-            st = 255 / spl
+            st = int(256 / spl)
 
             index_dict = {}
             for i in range(spl):
@@ -103,7 +103,7 @@ def main(arguments):
                 r, g, b = s
                 index = int(r / st) * spl * spl + \
                     int(g / st) * spl + int(b / st)
-                if index_dict[index] == 0:
+                if index_dict.get(index, 0) == 0:
                     index_dict[index] = (
                         int((r / st + 0.5) * st), int((g / st + 0.5) * st), int((b / st + 0.5) * st))
                 new_color_dict[s] = index_dict[index]
