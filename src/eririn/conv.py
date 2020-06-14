@@ -32,6 +32,27 @@ def ctuple2cstr(tup, dic=None):
 
     return "%02X%02X%02X" % (r, g, b)
 
+
+def quantize(rgb=None, rgbmap=None):
+    from sklearn.cluster import KMeans
+    import numpy as np
+    colorlist = list(rgbmap.keys())
+    colors = len(colorlist)
+    X = np.array([[t[0] / 255.0, t[1] / 255.0, t[2] / 255.0]
+                  for t in colorlist])
+    clusters = 65535
+    kmeans = KMeans(n_clusters=clusters, verbose=2,
+                    random_state=0, init='random', algorithm='full', n_init=3).fit(X)
+    result = kmeans.labels_
+    remapped = {colorlist[k]: colorlist[result[k]] for k in range(colors)}
+
+    new_rgb = []
+    for tup in rgb:
+        new_rgb.append(remapped[tup])
+
+    return new_rgb, remapped, 65535
+
+
 def get_image_color_dict(im, size_im):
     width, height = im.size
     c_width, c_height = size_im
@@ -55,14 +76,12 @@ def get_image_color_dict(im, size_im):
         rgb = list(zip(list(im3.getdata(band=cdict["R"])), list(
             im3.getdata(band=cdict["G"])), list(im3.getdata(band=cdict["B"]))))
 
-
     rgbmap = {(r, g, b): (r, g, b) for r, g, b in rgb}
     num_c = len(list(rgbmap.keys()))
     print("read colors: %d" % num_c)
     print("reduced colors: %d" % int(num_c * reduced_ratio))
 
     return rgb, rgbmap, num_c
-
 
 
 def resize_tuple(width, height):
@@ -76,6 +95,7 @@ def resize_tuple(width, height):
     print("actual pixel to write = %d" % actual_pixel)
 
     return (r_width, r_height)
+
 
 def get_reduced_color_map(num_c, rgbmap):
     if reduced_ratio == 1.0:
@@ -97,16 +117,14 @@ def get_reduced_color_map(num_c, rgbmap):
         mr, mg, mb = int(
             ((r + 0.5) / 256) * 256), int(((g + 0.5) / 256) * 256), int(((b + 0.5) / 256) * 256)
         i, j, k = int(r / 256 * st), int(g /
-                                            256 * st), int(b / 256 * st)
+                                         256 * st), int(b / 256 * st)
         index = i * spl1p * spl1p + j * spl1p + k
         if index_dict[index] == 0:
             index_dict[index] = (
                 int((r / st + 0.5) * st), int((g / st + 0.5) * st), int((b / st + 0.5) * st))
         new_color_dict[s] = index_dict[index]
 
-
     return new_color_dict
-
 
 
 def main(arguments):
@@ -135,49 +153,27 @@ def main(arguments):
             rgb, rgbmap, num_c = get_image_color_dict(im, resized)
 
             if num_c > 65535:
-                # attempt to png8
-                im_tmp = im.quantize(colors=256, method=2)
-                im2 = im_tmp.convert("RGB")
-                rgb, rgbmap, num_c = get_image_color_dict(im2, resized)
+                rgb, rgbmap, num_c = quantize(rgb=rgb, rgbmap=rgbmap)
 
-                if num_c > 65535:
-                    resized = resize_tuple(width, height)
-                    rgb, rgbmap, num_c = get_image_color_dict(im, resized)
-
-                    stepx = int(width / 100.0)
-                    stepy = int(height / 100.0)
-
-                    if num_c > 65535:
-                        while num_c > 65535:
-                            resized = (resized[0] - stepx, resized[1] - stepy)
-                            rgb, rgbmap, num_c = get_image_color_dict(im, resized)
-                    else:
-                        while num_c <= 65535:
-                            oldtup = rgb, rgbmap, num_c, resized
-                            resized = (resized[0] + stepx, resized[1] + stepy)
-                            rgb, rgbmap, num_c = get_image_color_dict(im, resized)
-                        
-                        rgb, rgbmap, num_c, resized = oldtup
-
-            c_width, c_height = resized
-
-            new_color_dict = get_reduced_color_map(num_c, rgbmap)
             fo = Font(name='Calibri', size=1, color="FFFFFFFF")
+
             bytes_written = 0
-            for x in tqdm(range(c_width)):
-                for y in range(c_height):
+
+            for x in tqdm(range(width)):
+                for y in range(height):
                     color = ctuple2cstr(
-                        rgb[y * c_width + x], dic=new_color_dict)
-                    c = ws.cell(column=(x + 1), row=(y + 1), value=("#%s" % color))
+                        rgb[y * width + x], dic=rgbmap)
+                    c = ws.cell(column=(x + 1), row=(y + 1),
+                                value=("#%s" % color))
                     bytes_written += 1
                     co = Color(color)
                     c.font = fo
                     c.fill = PatternFill(fgColor=co, fill_type="solid")
-                    
-            for y in range(c_height):
+
+            for y in range(height):
                 ws.row_dimensions[y + 1].height = height_in_points
 
-            for x in range(c_width):
+            for x in range(width):
                 ws.column_dimensions[get_column_letter(
                     x + 1)].width = width_in_charwidth
 
