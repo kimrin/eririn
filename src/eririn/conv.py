@@ -106,7 +106,8 @@ def recreate_image(rgb=None, w=0, h=0, n_colors=32767):
     label_idx = 0
     for j in range(h):
         for i in range(w):
-            rgb.append(tuple([int(r * 255), int(g * 255), int(b * 255)]) for r, g, b in codebook[labels[label_idx]])
+            r, g, b = codebook[labels[label_idx]].tolist()
+            rgb.append((int(r * 255), int(g * 255), int(b * 255)))
             label_idx += 1
 
     return rgb, len(codebook)
