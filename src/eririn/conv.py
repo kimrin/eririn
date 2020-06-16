@@ -3,12 +3,18 @@
 
 import os
 from operator import itemgetter
+from time import time
 
+import numpy as np
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.styles.colors import Color
 from openpyxl.utils.cell import get_column_letter
 from PIL import Image
+from sklearn.cluster import KMeans
+from sklearn.datasets import load_sample_image
+from sklearn.metrics import pairwise_distances_argmin
+from sklearn.utils import shuffle
 from tqdm import tqdm
 
 # LIMIT_OF_EXCEL = 0x18001
@@ -38,26 +44,82 @@ def quantize(rgb=None, rgbmap=None):
     import numpy as np
     colorlist = list(rgbmap.keys())
     colors = len(colorlist)
-    X = np.array([[t[0] / 255.0, t[1] / 255.0, t[2] / 255.0]
-                  for t in colorlist])
+    X = np.array(colorlist)
     clusters = 65535
     kmeans = KMeans(n_clusters=clusters, verbose=2,
-                    random_state=0, init='random', algorithm='full', n_init=3).fit(X)
+                    random_state=0, init='k-means++', algorithm='full', n_init=1).fit(X)
     result = kmeans.labels_
-    remapped = {colorlist[k]: colorlist[result[k]] for k in range(colors)}
+    centers = kmeans.cluster_centers_
+    clist = [[] for x in range(colors)]
+    for idx, r in enumerate(result):
+        clist[r].append(idx)
+
+    remapped = {}
+    for idx, tup in enumerate(colorlist):
+        r, g, b = centers[idx]
+        remapped[tup] = (r, g, b)
 
     new_rgb = []
     for tup in rgb:
         new_rgb.append(remapped[tup])
 
-    return new_rgb, remapped, 65535
+    return new_rgb, remapped, clusters
+
+# Authors: Robert Layton <robertlayton@gmail.com>
+#          Olivier Grisel <olivier.grisel@ensta.org>
+#          Mathieu Blondel <mathieu@mblondel.org>
+#
+# License: BSD 3 clause
+
+# tweaked by Takeshi Kimura
+
+
+def recreate_image(rgb=None, w=0, h=0, n_colors=32767):
+    """Recreate the (compressed) image from the code book & labels"""
+    # Load the Summer Palace photo
+
+    # china = load_sample_image(filename)
+
+    # Convert to floats instead of the default 8 bits integer coding. Dividing by
+    # 255 is important so that plt.imshow behaves works well on float data (need to
+    # be in the range [0-1])
+    china = np.array(rgb, dtype=np.float64) / 255
+
+    image_array = china
+
+    print("Fitting model on a small sub-sample of the data")
+    t0 = time()
+    image_array_sample = shuffle(image_array, random_state=0)[:n_colors * 2]
+    kmeans = KMeans(n_clusters=n_colors, verbose=2, random_state=0, init='k-means++',
+                    algorithm='full', n_init=1, max_iter=30, n_jobs=2).fit(image_array_sample)
+    print("done in %0.3fs." % (time() - t0))
+    # Get labels for all points
+    print("Predicting color indices on the full image (k-means)")
+    t0 = time()
+    labels = kmeans.predict(image_array)
+    print("done in %0.3fs." % (time() - t0))
+
+    codebook = kmeans.cluster_centers_
+
+    d = codebook.shape[1]
+    rgb = []
+    label_idx = 0
+    for j in range(h):
+        for i in range(w):
+            rgb.append(tuple([int(r * 255), int(g * 255), int(b * 255)]) for r, g, b in codebook[labels[label_idx]])
+            label_idx += 1
+
+    return rgb, len(codebook)
 
 
 def get_image_color_dict(im, size_im):
     width, height = im.size
     c_width, c_height = size_im
-    im2 = im.resize(size_im, resample=Image.LANCZOS)
-    if c_width != width or c_height != height:
+    im2 = None
+    if (c_width == width) and (c_height == height):
+        im2 = im
+    else:
+        im2 = im.resize(size_im, resample=Image.LANCZOS)
         print("resized to: size=%s" % str(im2.size))
     bands = im2.getbands()
     cdict = {}
@@ -153,10 +215,10 @@ def main(arguments):
             rgb, rgbmap, num_c = get_image_color_dict(im, resized)
 
             if num_c > 65535:
-                rgb, rgbmap, num_c = quantize(rgb=rgb, rgbmap=rgbmap)
+                rgb, num_c = recreate_image(rgb, w=resized[0], h=resized[1])
+                rgbmap = None
 
             fo = Font(name='Calibri', size=1, color="FFFFFFFF")
-
             bytes_written = 0
 
             for x in tqdm(range(width)):
